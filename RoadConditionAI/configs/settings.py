@@ -1,80 +1,40 @@
-# configs/settings.py
-
-import os
-from typing import Dict, List, Tuple
+# RoadConditionAI/configs/settings.py
+from pathlib import Path
 import torch
 
-# 项目根目录
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+# 项目路径配置
+BASE_DIR = Path(__file__).parent.parent.resolve()
+# 添加原始图片路径配置
+DATA_RAW_UNFILTERED = Path(__file__).parent.parent / "data" / "raw" / "img_unfiltered"
 
-# 数据目录设置
-DATA_RAW_DIR = os.path.join(BASE_DIR, "data", "raw")
-DATA_PROCESSED_DIR = os.path.join(BASE_DIR, "data", "processed")
-CORPUS_FILENAME = "corpus.json"
+# 数据目录配置
+DATA_RAW_DIR = BASE_DIR / "data" / "raw" / "img_unfiltered"
+DATA_PROCESSED_DIR = BASE_DIR / "data" / "processed" / "results" / "img_division"
+DATA_PROCESSED_VIS_DIR = BASE_DIR / "data" / "processed" / "results" / "img_division_vis"  # 新增可视化目录
+# SAM模型路径
+SAM_MODEL_PATH = BASE_DIR / "models" / "vit_h.pth"
 
-# 模型设置（使用 SAM1 模型权重）
-SAM_MODEL_PATH = os.path.join(BASE_DIR, "models", "vit_h.pth")
+# 设备配置
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# 检测参数
-DETECTION_CONFIDENCE = 0.6
-IMG_TARGET_SIZE = (1024, 1024)
-
-LABEL_MAPPING: Dict[int, Tuple[str, str]] = {
-    0: ("car", "机动车"),
-    1: ("truck", "货车"),
-    2: ("accident", "交通事故"),
-    3: ("dispersion", "抛洒物"),
-    4: ("line_damage", "标志线损坏"),
-    5: ("pothole", "坑槽"),
-    6: ("motorcycle", "摩托车"),
-    7: ("illegal_occupancy", "违规占道")
+# SAM优化参数（基于道路检测特点调整）
+SAM_CONFIG = {
+    "points_per_side": 48,        # 增加采样密度以检测小物体
+    "pred_iou_thresh": 0.8,       # 降低IoU阈值保留潜在目标
+    "stability_score_thresh": 0.85, # 平衡稳定性和灵敏度
+    "crop_n_layers": 2,           # 增加分层检测
+    "min_mask_region_area": 50,   # 减小最小区域面积
+    "crop_n_points_downscale_factor": 1,
+    "box_nms_thresh": 0.7
 }
 
-# 类型细分映射
-SUBTYPE_MAPPING: Dict[str, List[str]] = {
-    "交通事故": ["追尾", "侧碰", "刮蹭", "翻车", "多车连撞"],
-    "标志线损坏": ["车道线模糊", "标志缺失", "反光失效", "标线磨损", "标线覆盖"],
-    "抛洒物": ["石块", "货物散落", "垃圾堆积", "油污泄漏", "动物尸体"],
-    "违规占道": ["应急车道占用", "施工占道", "违法停车", "违规变道", "路障设置"]
+# 可视化参数
+VISUAL_CONFIG = {
+    "box_color": (0, 255, 0),     # BGR绿色边框
+    "thickness": 1,               # 框线粗细
+    "font_scale": 0.4            # 文字大小
 }
 
-# 负样本 QA 对生成概率
-NEGATIVE_QA_PROB = 0.3
-
-# 道路状态与问答模板
-ROAD_STATUS_MAPPING = {
-    "has_litter": {
-        "question": "图中公路上有没有抛洒物？",
-        "positive_answer": "存在抛洒物。",
-        "negative_answer": "不存在抛洒物。"
-    },
-    "has_line_damage": {
-        "question": "图中公路上有没有标志线损坏？",
-        "positive_answer": "存在标志线损坏。",
-        "negative_answer": "不存在标志线损坏。"
-    },
-    "has_pothole": {
-        "question": "图中公路上是否存在坑槽？",
-        "positive_answer": "存在坑槽。",
-        "negative_answer": "不存在坑槽。"
-    },
-    "has_accident": {
-        "question": "图中公路上有没有交通事故发生？",
-        "positive_answer": "存在交通事故。",
-        "negative_answer": "不存在交通事故。"
-    },
-    "has_illegal_occupancy": {
-        "question": "图中公路上有没有违规占道？",
-        "positive_answer": "存在违规占道。",
-        "negative_answer": "不存在违规占道。"
-    }
-}
-
-# 天气信息
-DEFAULT_WEATHER = "晴天"
-
-# 车辆类别
-VEHICLE_CLASSES = ["机动车", "货车", "摩托车"]  # 使用中文标签，与 LABEL_MAPPING 一致
-
-# 设备选择（支持动态切换）
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"  # 动态检测
+# 创建目录（添加可视化目录）
+DATA_PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+DATA_PROCESSED_VIS_DIR.mkdir(parents=True, exist_ok=True)
