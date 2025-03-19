@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from typing import List, Dict, Tuple
 
 from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
-from configs import settings
+from RoadConditionAI.configs import settings
 import logging
 
 class RoadSAMDetector:

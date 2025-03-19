@@ -9,7 +9,7 @@ model_urls = {
 }
 
 # 目标目录
-save_dir = r"D:\Myproject\RoadConditionAI\models"
+save_dir = "models"
 
 # 确保目录存在
 os.makedirs(save_dir, exist_ok=True)

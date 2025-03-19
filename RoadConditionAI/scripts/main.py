@@ -12,9 +12,10 @@ import pandas as pd
 from datetime import datetime
 from typing import List, Dict, Optional
 from PIL import Image, ExifTags
-from configs import settings
+from RoadConditionAI.configs import settings
 from pathlib import Path
-from models.detector import RoadSAMDetector  # 导入 SAM 检测器
+from RoadConditionAI.models.detector import RoadSAMDetector  # 导入 SAM 检测器
+from RoadConditionAI.scripts.sub_img_rec import classify_with_clip
 
 # 配置日志记录
 logging.basicConfig(
@@ -221,6 +222,53 @@ def process_image(filename: str, detector: RoadSAMDetector) -> Optional[Dict]:
             output_dir.mkdir(exist_ok=True, parents=True)
             cv2.imwrite(str(output_dir / f"vis_{filename}"), vis_img)
 
+            # # 子图保存逻辑
+            # segments_dir = output_dir / "segments"
+            # segments_dir.mkdir(exist_ok=True)
+            #
+            # base_name = Path(filename).stem
+            # for idx, obj in enumerate(objects):
+            #     # 边界框安全校验
+            #     x1, y1, x2, y2 = map(int, obj["bbox"])
+            #     h, w = img.shape[:2]
+            #
+            #     # 裁剪区域有效性验证
+            #     x1 = max(0, min(x1, w - 1))
+            #     y1 = max(0, min(y1, h - 1))
+            #     x2 = max(x1 + 1, min(x2, w))
+            #     y2 = max(y1 + 1, min(y2, h))
+            #
+            #     # 执行裁剪
+            #     cropped = img[y1:y2, x1:x2]
+            #     if cropped.size == 0:
+            #         logging.warning(f"无效区域跳过: {obj['bbox']} in {filename}")
+            #         continue
+            #
+            #     # 调用CLIP方法进行检测。
+            #     clip_result = classify_with_clip(
+            #         cropped_image=cropped,
+            #         subtype_mapping=settings.SUBTYPE_MAPPING
+            #     )
+            #
+            #     # 更新对象的分类结果
+            #     if clip_result:
+            #         obj.update(clip_result)  # 添加 parent_label 和 subtype
+            #     else:
+            #         # 设置默认标签
+            #         obj["parent_label"] = "未知"
+            #         obj["subtype"] = "未知"
+            #
+            #     # 生成带中文标签的文件名
+            #     safe_label = obj["label"]  # 去除非法字符
+            #     seg_filename = f"{base_name}_seg{idx}_{safe_label}.jpg"
+            #
+            #     # 保存子图（添加JPEG质量参数）
+            #     cv2.imwrite(
+            #         str(segments_dir / seg_filename),
+            #         cropped,
+            #         [int(cv2.IMWRITE_JPEG_QUALITY), 95]
+            #     )
+
         # 获取元数据和道路状态
         metadata = process_image_metadata(str(img_path))
         road_status = update_road_status(objects)
@@ -239,6 +287,7 @@ def process_image(filename: str, detector: RoadSAMDetector) -> Optional[Dict]:
         logging.error(f"处理失败 {filename}: {str(e)}")
         return None
 
+
 def main():
     """主流程"""
     try:
@@ -248,7 +297,7 @@ def main():
 
         processed_count = 0
         raw_dir = Path(settings.DATA_RAW_DIR)
-        for img_file in raw_dir.glob("image_[1-6].jpg"):
+        for img_file in raw_dir.glob(f"image_1.png"):
             logging.info(f"正在处理: {img_file.name}")
             result = process_image(img_file.name, detector)
 
@@ -273,6 +322,7 @@ def main():
     except Exception as e:
         logging.error(f"主流程异常: {str(e)}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

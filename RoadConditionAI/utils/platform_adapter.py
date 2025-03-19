@@ -2,7 +2,7 @@
 import platform
 import os
 import torch
-import configs.settings as settings
+import RoadConditionAI.configs.settings as settings
 
 
 def setup_runtime():
