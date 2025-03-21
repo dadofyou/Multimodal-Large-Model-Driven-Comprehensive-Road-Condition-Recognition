@@ -11,6 +11,8 @@ DATA_RAW_UNFILTERED = Path(__file__).parent.parent / "data" / "raw" / "img_unfil
 DATA_RAW_DIR = BASE_DIR / "data" / "raw" / "img_unfiltered"
 DATA_PROCESSED_DIR = BASE_DIR / "data" / "processed" / "results" / "img_division"
 DATA_PROCESSED_VIS_DIR = BASE_DIR / "data" / "processed" / "results" / "img_division_vis"  # 新增可视化目录
+DATA_PROCESSED_VIS_ANN_DIR = BASE_DIR / "data" / "processed" / "results" / "annotations"  # 输出目录
+DATA_PROCESSED_VIS_ANN_IMG_DIR = BASE_DIR / "data" / "processed" / "results" / "ann_img_img"  # 新增可视化目录
 # SAM模型路径
 SAM_MODEL_PATH = BASE_DIR / "models" / "vit_h.pth"
 
