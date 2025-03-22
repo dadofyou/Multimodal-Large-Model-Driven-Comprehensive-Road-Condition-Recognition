@@ -1,11 +1,9 @@
 import logging
 from pathlib import Path
-
 import torch
 import json
 import clip
 import numpy as np
-import torch
 from PIL import Image
 from RoadConditionAI.configs.settings import (
     DATA_PROCESSED_DIR,
@@ -16,111 +14,99 @@ from RoadConditionAI.configs.settings import (
 
 # 确保输出目录存在
 DATA_PROCESSED_VIS_ANN_DIR.mkdir(parents=True, exist_ok=True)
+DATA_PROCESSED_VIS_ANN_IMG_DIR.mkdir(parents=True, exist_ok=True)
+
+# 设置日志输出
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 """
-clip 环境配置
-激活环境配置
-pip install ftfy regex
-pip install git+https://github.com/openai/CLIP.git
+CLIP 环境配置：
+安装依赖：pip install ftfy regex
+安装 CLIP：pip install git+https://github.com/openai/CLIP.git
 """
 
-# 初始化 CLIP 模型
+# 初始化 CLIP 模型（兼容CPU与GPU）
 device = "cuda" if torch.cuda.is_available() else "cpu"
 clip_model, clip_preprocess = clip.load("ViT-L/14", device=device)
+
 """
-CLIP筛选目标
-除去无意义的分割区块（由于SAM分割结果较细，有很多无意义的分割结果。）
-筛选出：车辆，道路等个体，以便违规占道/交通事故的判断。
-筛选出：抛洒物，交通标志线，路面裂缝等物体或现象，以便使用模型对其进行进一步识别。
+定义道路检测语义库：
+目标类别包括：抛洒物、道路标志线损坏、道路坑洞、交通事故、违规占道
+每个类别给出多种描述，尽量覆盖不同角度和特征
 """
-# 定义道路检测语义库（根据实际需求补充完整）
 ROAD_STATUS_CONFIG = {
     "text_prompts": {
-        # 使用具体车辆类型替代抽象概念
-        "car": [
-            # 车辆独有特征
-            "A motor vehicle with four wheels and visible windows",
-            "Road vehicle with tires and headlights",
-            "Automobile having windshield and license plate",
-
-            # 添加否定约束
-            "A car not including trees or poles",
-            "Vehicle excluding vertical structures like columns",
-
-            # 多视角描述
-            "Side view of sedan car with visible wheels",
-            "Rear perspective of pickup truck with tailgate",
-
-            # 物理接触特征
-            "Car tires in contact with road surface",
-            "Vehicle casting shadow on asphalt"
+        "spillage": [
+            "A photo of spilled substances on the road",
+            "Road litter with scattered debris",
+            "Loose materials spilled on asphalt",
+            "An image showing road spill with mixed debris"
         ],
-        "crack": [
-            # 裂缝类型学强化
-            "Asphalt alligator cracking with 5-15cm polygon patterns",  # 龟裂
-            "Transverse crack perpendicular to road axis (spacing>2m)",  # 横向裂缝
-      ],
+        "lane_damage": [
+            "A photo of damaged or faded road markings",
+            "Road with broken lane lines",
+            "An image showing deteriorated road sign lines",
+            "Damaged painted lines on a road surface"
+        ],
         "pothole": [
-            "Excluding drainage grates through pattern regularity analysis",
-            "Not confused with speed bumps via longitudinal profile scanning"
+            "A photo of a pothole on a road",
+            "Road surface with a deep pothole",
+            "An image showing a large pothole on asphalt",
+            "A cracked road featuring a pothole"
         ],
-        "lines": [
-            # **共性特征（所有线条类物体）**
-            "A white rectangle or parallelogram",
-            "painted lane line",
-
-            "White painted line on asphalt surface with sharp edges",
-            "Straight line with angle 0-180° relative to road direction",
+        "accident": [
+            "A photo of a traffic accident scene",
+            "Road accident with damaged vehicles",
+            "An image showing a collision on the road",
+            "Traffic accident with vehicle debris on the road"
         ],
-        "unknown": [
-            # 其他可能干扰物
-            "Overhead traffic signs on gantries",
-
-            # 特殊天气干扰
-            "Rainwater reflections mimicking line markings",
-            "Leaf debris arranged in linear patterns",
-            "unknown",
-            "items with such as trees and big pillar."
+        "illegal_occupation": [
+            "A photo of illegally parked vehicles obstructing the road",
+            "Road occupation by vehicles not following rules",
+            "An image showing vehicles parked illegally on the road",
+            "Vehicles occupying road space against regulations"
         ]
     },
+    # 根据实际情况可以调整各类别权重（和数量匹配）
     "category_weights": {
-        "car": 0.26,
-        "crack": 0.25,
+        "spillage": 0.25,
+        "lane_damage": 0.25,
         "pothole": 0.25,
-        "lines": 0.25,
-        "unknown": 0.25,
+        "accident": 0.25,
+        "illegal_occupation": 0.25,
     }
 }
 
-
 # 预计算文本特征（带类别权重）
 text_features_dict = {}
-# 修改文本特征处理部分（预计算部分）
 for category, prompts in ROAD_STATUS_CONFIG["text_prompts"].items():
-    text_inputs = torch.cat([clip.tokenize(f"a photo of {desc}") for desc in prompts]).to(device)
+    # 每条描述都拼接上前缀 "a photo of ..." 有助于 CLIP 更好理解图像内容
+    text_inputs = torch.cat([clip.tokenize(desc) for desc in prompts]).to(device)
     with torch.no_grad():
         features = clip_model.encode_text(text_inputs).float()
-        # 先归一化再应用权重
-        features /= features.norm(dim=-1, keepdim=True)
+        features /= features.norm(dim=-1, keepdim=True)  # 归一化
         weighted_features = features * ROAD_STATUS_CONFIG["category_weights"][category]
     text_features_dict[category] = weighted_features
 
 
 def filter_with_clip(raw_img_path: Path):
-    """处理单张图片的所有分割区域"""
-    # 获取对应的分割JSON文件
-    global similarities
+    """
+    处理单张图片：
+      1. 读取对应的 SAM 分割 JSON 文件
+      2. 加载原始图片
+      3. 遍历所有分割区域，裁剪后使用 CLIP 进行图文匹配
+      4. 采用动态阈值过滤无效区域，保存检测结果
+    """
     json_path = DATA_PROCESSED_DIR / f"{raw_img_path.stem}_sub.json"
     if not json_path.exists():
-        logging.warning(f"Segmentation JSON {json_path.name} not found")
+        logger.warning(f"未找到分割JSON文件: {json_path.name}")
         return
 
-    # 读取原始图片
     try:
-        raw_image = Image.open(raw_img_path)
-        # raw_image_np = np.array(raw_image.convert('RGB'))  # 确保为RGB格式
+        raw_image = Image.open(raw_img_path).convert("RGB")
     except Exception as e:
-        logging.error(f"Failed to load {raw_img_path.name}: {str(e)}")
+        logger.error(f"加载图片失败 {raw_img_path.name}: {str(e)}")
         return
 
     # 加载分割数据
@@ -130,81 +116,59 @@ def filter_with_clip(raw_img_path: Path):
     valid_regions = []
     sub_regions = seg_data.get("sub_regions", [])
     img_width, img_height = raw_image.size
-
-    # 校验原始尺寸
+    # SAM 原始尺寸信息（一般为 [height, width]）
     sam_original_size = seg_data.get("original_size", [img_height, img_width])
-
     if (img_height, img_width) != tuple(sam_original_size):
-        logging.warning(f"Size mismatch in {raw_img_path.name} | "
-                        f"SAM: {sam_original_size} vs Actual: {(img_height, img_width)}")
+        logger.warning(f"尺寸不匹配 {raw_img_path.name}: SAM {sam_original_size} vs 实际 {(img_height, img_width)}")
 
     for bbox in sub_regions:
-        # 校验边界框格式
         if len(bbox) != 4 or any(not isinstance(v, int) for v in bbox):
-            logging.debug(f"Invalid bbox format: {bbox}")
+            logger.debug(f"无效边界框格式: {bbox}")
             continue
-
         x1, y1, x2, y2 = bbox
-
-        # 坐标有效性检查
+        # 边界坐标有效性检查
         if x1 >= x2 or y1 >= y2 or x2 > img_width or y2 > img_height:
-            logging.debug(f"Invalid bbox coordinates: {bbox}")
+            logger.debug(f"无效边界框坐标: {bbox}")
             continue
 
-        # 计算区域面积
         area = (x2 - x1) * (y2 - y1)
-        if area < 50:  # 过滤过小区域
+        if area < 50:  # 忽略过小区域
             continue
+
         try:
-            # 直接裁剪边界框区域
+            # 裁剪区域图像
             crop_img = raw_image.crop((x1, y1, x2, y2))
             preprocessed = clip_preprocess(crop_img).unsqueeze(0).to(device)
         except Exception as e:
-            logging.debug(f"Cropping failed for {bbox}: {str(e)}")
+            logger.debug(f"裁剪失败 {bbox}: {str(e)}")
             continue
 
-        # 特征提取与相似度计算
         with torch.no_grad():
             img_features = clip_model.encode_image(preprocessed).float()
             img_features /= img_features.norm(dim=-1, keepdim=True)
 
-            # 温度缩放参数
+            # 温度缩放参数（可根据实验调整）
             temperature = 20.0
             all_scores = []
             category_list = []
 
             for cat, cat_features in text_features_dict.items():
-                # 计算最大相似度
+                # 计算 CLIP 相似度，取最大值作为该类别的评分
                 similarities = (img_features @ cat_features.T) * temperature
                 max_similarity = similarities.max().item()
                 all_scores.append(max_similarity)
                 category_list.append(cat)
 
-                # Softmax归一化
             scores_tensor = torch.tensor(all_scores)
             probs = torch.softmax(scores_tensor, dim=0)
-            max_score, best_idx = torch.max(probs, dim=0)
+            max_prob, best_idx = torch.max(probs, dim=0)
             best_category = category_list[best_idx.item()]
-            final_score = max_score.item()
+            final_score = max_prob.item()
 
-        # 打印置信度信息（保留4位小数）
-        score_percent = max_score * 100
-
-        # 动态阈值策略调整
+        # 动态阈值策略：基础阈值可根据区域面积适当放宽
         base_threshold = 0.25
-        area_adjustment = 0.001 * np.log1p(area / 5000)  # 对大面积区域放宽阈值
+        area_adjustment = 0.001 * np.log1p(area / 5000)  # 对大面积区域稍微放宽阈值
         dynamic_threshold = base_threshold - area_adjustment
-
-        # 转换为百分比形式用于比较
-        dynamic_threshold_percent = dynamic_threshold * 100
-        # print(
-        #     f"CLIP识别 - {raw_img_path.name} | "
-        #     f"区域: {bbox} | "
-        #     f"类别: {best_category:<8} | "
-        #     f"置信度: {score_percent:05.2f}%"
-        #     f" | 动态阈值: {dynamic_threshold_percent:05.2f}%"
-        #     f" | max_score: {max_score}"
-        # )
 
         if final_score > dynamic_threshold and best_category != 'unknown':
             valid_regions.append({
@@ -214,28 +178,35 @@ def filter_with_clip(raw_img_path: Path):
                 "area": area
             })
 
-        # 保存筛选结果
-        output_path = DATA_PROCESSED_VIS_ANN_DIR / f"{raw_img_path.stem}.json"
-        with open(output_path, 'w') as f:
-            json.dump({
-                "metadata": {
-                    "source_image": raw_img_path.name,
-                    "total_regions": len(seg_data.get('regions', [])),
-                    "valid_regions": len(valid_regions)
-                },
-                "regions": valid_regions
-            }, f, indent=2)
-        logging.info(f"Processed {raw_img_path.name}: {len(valid_regions)} valid regions")
+    # 保存筛选结果（整个图片处理完成后保存一次）
+    output_path = DATA_PROCESSED_VIS_ANN_DIR / f"{raw_img_path.stem}.json"
+    output_data = {
+        "metadata": {
+            "source_image": raw_img_path.name,
+            "total_regions": len(sub_regions),
+            "valid_regions": len(valid_regions)
+        },
+        "regions": valid_regions
+    }
+    with open(output_path, 'w') as f:
+        json.dump(output_data, f, indent=2)
+
+    logger.info(f"处理完成 {raw_img_path.name}: {len(valid_regions)} 个有效区域")
+
+    # 可选：将包含有效区域的图片保存到指定目录（标注可视化）
+    # 此处仅保存原图，可以扩展为在图像上标注 bbox 后保存
+    vis_img_path = DATA_PROCESSED_VIS_ANN_IMG_DIR / raw_img_path.name
+    raw_image.save(vis_img_path)
 
 
 if __name__ == "__main__":
     processed_count = 0
-    # 处理所有原始图片
     for img_file in DATA_RAW_DIR.glob('*'):
         if img_file.suffix.lower() in ['.jpg', '.jpeg', '.png']:
             filter_with_clip(img_file)
             processed_count += 1
-    print(f"Processing complete. Total processed: {processed_count} images")
+    logger.info(f"所有图片处理完成，共处理: {processed_count} 张")
+
 
 
 
