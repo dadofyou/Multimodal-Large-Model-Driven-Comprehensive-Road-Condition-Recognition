@@ -8,7 +8,7 @@ DATA_RAW_UNFILTERED = BASE_DIR / "data" / "raw" / "img_unfiltered"
 
 # 数据目录配置
 DATA_RAW_DIR = BASE_DIR / "data" / "raw" / "img_unfiltered"
-DATA_PROCESSED_DIR = BASE_DIR / "data" / "processed" / "results" / "img_division"
+DATA_PROCESSED_DIR = BASE_DIR / "data" / "processed" / "results" / "sam_img_division"
 DATA_PROCESSED_VIS_DIR = BASE_DIR / "data" / "processed" / "results" / "img_division_vis"
 DATA_PROCESSED_VIS_ANN_DIR = BASE_DIR / "data" / "processed" / "results" / "annotations"
 DATA_PROCESSED_VIS_ANN_IMG_DIR = BASE_DIR / "data" / "processed" / "results" / "ann_img_img"
@@ -19,18 +19,18 @@ SAM_MODEL_PATH = BASE_DIR / "models" / "vit_h.pth"
 # 设备配置（支持GPU和CPU）
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# SAM配置（新增和更新）
+# SAM配置（多尺度切割，覆盖大区域与小区域）
 SAM_CONFIG = {
     "model_type": "vit_h",
     "use_rle": True,             # 启用RLE压缩
     "use_fp16": True,            # 启用混合精度（CPU上会自动禁用）
-    "points_per_side": 24,       # 降低采样密度
-    "pred_iou_thresh": 0.85,     # 提高IoU阈值
-    "stability_score_thresh": 0.9,  # 提高稳定性阈值
-    "crop_n_layers": 1,          # 降低分层检测层数
-    "min_mask_region_area": 200, # 增大最小区域面积
-    "box_nms_thresh": 0.7,       # NMS过滤阈值
-    "crop_n_points_downscale_factor": 2  # 下采样因子
+    "points_per_side": 32,       # 增大采样密度，便于均匀覆盖大区域和小区域
+    "pred_iou_thresh": 0.80,     # 稍微降低IoU阈值，以保留大面积区域
+    "stability_score_thresh": 0.85,
+    "crop_n_layers": 3,          # 增加分层检测，保证多尺度分割
+    "min_mask_region_area": 200, # 调整最小区域面积（适当降低以便捕获更多细节）
+    "box_nms_thresh": 0.7,
+    "crop_n_points_downscale_factor": 2
 }
 
 # 性能配置

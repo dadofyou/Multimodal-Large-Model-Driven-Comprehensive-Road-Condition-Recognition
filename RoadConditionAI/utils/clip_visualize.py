@@ -8,6 +8,7 @@ from RoadConditionAI.configs.settings import (
     DATA_PROCESSED_VIS_ANN_DIR,  # CLIP json文件目录
     DATA_PROCESSED_VIS_ANN_IMG_DIR  # 可视化目录
 )
+import shutil
 
 DATA_PROCESSED_VIS_ANN_IMG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -39,6 +40,20 @@ class RoadVisualizer:
                 self.font = ImageFont.load_default(size=self.config["font_size"])
                 logging.warning("使用默认字体")
 
+    def _clean_output_dir(self, output_dir: Path):
+        """安全清空输出目录"""
+        try:
+            if output_dir.exists():
+                # 递归删除目录内容（网页1/网页4方案）
+                shutil.rmtree(output_dir, ignore_errors=True)
+                # 延迟确保删除完成（针对Windows系统）
+                import time
+                time.sleep(0.5)
+            # 重建目录结构（网页2方案）
+            output_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logging.error(f"清空目录失败: {str(e)}")
+            raise
     def _validate_bbox(self, img, bbox):
         """校正边界框坐标"""
         x1, y1, x2, y2 = (
@@ -119,6 +134,8 @@ class RoadVisualizer:
 
     # 批量识别
     def process_mult_images(self):
+        # 预处理：清空可视化目录
+        self._clean_output_dir(DATA_PROCESSED_VIS_ANN_IMG_DIR)
         count = 0
         for img_path in DATA_RAW_DIR.glob("*.jpg"):
             result = visualizer.generate_visualization(
