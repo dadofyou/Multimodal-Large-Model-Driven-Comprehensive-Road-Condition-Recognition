@@ -62,11 +62,15 @@ ROAD_STATUS_CONFIG = {
         "spillage": {
             "positive": [
                 # 增加空间位置限定词（关键修改点）
-                "Debris lying flat on road surface surrounded by tire marks",
+                "Three-dimensional debris protruding above road surface texture",
                 "Broken objects scattered on asphalt with shadow cast downward",
                 "Foreign materials accumulated near roadside drainage gutter",
                 "Spilled cargo dispersed across traffic lane without vertical structures",
-                "Ground-level view of debris field extending along road centerline"
+                "Disposed household garbage bags torn open with plastic debris spreading",
+                "Cardboard boxes burst open spilling packaged goods across multiple lanes",
+                "Asphalt surface covered with nails and screws from construction vehicle spill",
+                "Windblown sand dunes formed across rural road after sand truck leakage",
+                #"Asymmetrical material dispersion unrelated to traffic guidance systems"
             ],
             "negative": [
                 # 强化车辆部件特征（新增针对性负样本）
@@ -74,7 +78,12 @@ ROAD_STATUS_CONFIG = {
                 "Overturned truck showing intact cargo compartment walls",
                 "Vehicle roof with dented metal but no detached parts",
                 "Close-up of windshield cracks spreading across glass surface",
-                "Bicycle rack mounted on car roof carrying sports equipment"
+                "Bicycle rack mounted on car roof carrying sp'orts equipment",
+                "Construction materials properly secured with cargo nets on trailer 'bed",
+                "Freshly painted road markings with crisp edges and high retroreflectivity",
+                "Worn but intact dashed lines showing gradual fading from traffic wear",
+                "Worn thermoplastic markings with partial detachment but preserved alignment",
+                "Abrasion-faded symbols still following original stencil patterns"
             ]
          },
         "lane_damage": {
@@ -129,7 +138,7 @@ ROAD_STATUS_CONFIG = {
     # FIXME:各问题的阈值可根据实验调优
     "thresholds": {
         "accident": 0.63,
-        "spillage": 0.625,
+        "spillage": 0.60,
         "lane_damage": 0.61,
         "illegal_occupation": 0.55,
         "pothole": 0.60
@@ -240,7 +249,7 @@ def filter_with_clip(raw_img_path: Path):
     img_width, img_height = raw_image.size
 
     # 调整面积过滤阈值为 1000（可以根据实际情况进一步调优）
-    min_area_threshold = 1000
+    min_area_threshold = 500
     # 定义缩放因子，用于放大相似度差值
     scaling_factor = 10.0
 
@@ -329,7 +338,7 @@ if __name__ == "__main__":
 
     processed_count = 0
     # 这里取前 5 张图片进行测试
-    for img_file in list(DATA_RAW_DIR.glob('*'))[:10]:
+    for img_file in list(DATA_RAW_DIR.glob('*'))[20:30]:
         if img_file.suffix.lower() in ['.jpg', '.jpeg', '.png']:
             # 先进行检测并生成 JSON 文件
             filter_with_clip(img_file)
