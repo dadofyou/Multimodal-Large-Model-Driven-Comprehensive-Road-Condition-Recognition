@@ -24,11 +24,11 @@ SAM_CONFIG = {
     "model_type": "vit_h",
     "use_rle": True,             # 启用RLE压缩
     "use_fp16": True,            # 启用混合精度（CPU上会自动禁用）
-    "points_per_side": 32,       # 增大采样密度，便于均匀覆盖大区域和小区域
+    "points_per_side": 24,       # 增大采样密度，便于均匀覆盖大区域和小区域
     "pred_iou_thresh": 0.80,     # 稍微降低IoU阈值，以保留大面积区域
     "stability_score_thresh": 0.85,
     "crop_n_layers": 3,          # 增加分层检测，保证多尺度分割
-    "min_mask_region_area": 200, # 调整最小区域面积（适当降低以便捕获更多细节）
+    "min_mask_region_area": 500, # 调整最小区域面积（适当降低以便捕获更多细节）
     "box_nms_thresh": 0.7,
     "crop_n_points_downscale_factor": 2
 }
