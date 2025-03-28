@@ -338,7 +338,7 @@ if __name__ == "__main__":
 
     processed_count = 0
     # 这里取前 5 张图片进行测试
-    for img_file in list(DATA_RAW_DIR.glob('*'))[20:30]:
+    for img_file in DATA_RAW_DIR.glob('*'):
         if img_file.suffix.lower() in ['.jpg', '.jpeg', '.png']:
             # 先进行检测并生成 JSON 文件
             filter_with_clip(img_file)
