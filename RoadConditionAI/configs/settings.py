@@ -8,7 +8,7 @@ DATA_RAW_UNFILTERED = BASE_DIR / "data" / "raw" / "img_unfiltered"
 
 # 数据目录配置
 DATA_RAW_DIR = BASE_DIR / "data" / "raw" / "img_unfiltered"
-DATA_PROCESSED_DIR = BASE_DIR / "data" / "processed" / "results" / "sam_img_division"
+DATA_PROCESSED_DIR = BASE_DIR / "data" / "processed" / "results" / "img_division"
 DATA_PROCESSED_VIS_DIR = BASE_DIR / "data" / "processed" / "results" / "img_division_vis"
 DATA_PROCESSED_VIS_ANN_DIR = BASE_DIR / "data" / "processed" / "results" / "annotations"
 DATA_PROCESSED_VIS_ANN_IMG_DIR = BASE_DIR / "data" / "processed" / "results" / "ann_img_img"
@@ -27,7 +27,7 @@ SAM_CONFIG = {
     "points_per_side": 24,       # 增大采样密度，便于均匀覆盖大区域和小区域
     "pred_iou_thresh": 0.80,     # 稍微降低IoU阈值，以保留大面积区域
     "stability_score_thresh": 0.85,
-    "crop_n_layers": 3,          # 增加分层检测，保证多尺度分割
+    "crop_n_layers": 1,          # 增加分层检测，保证多尺度分割
     "min_mask_region_area": 500, # 调整最小区域面积（适当降低以便捕获更多细节）
     "box_nms_thresh": 0.7,
     "crop_n_points_downscale_factor": 2
